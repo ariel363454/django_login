@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>停車場管理後台</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+
+    body {
+        background-color: #121212;
+        color: white;
+    }
+
+    .card {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        color: white;
+    }
+
+    .table {
+        color: white;
+    }
+
+    .table th {
+        background-color: #2a2a2a;
+    }
+
+    .table td {
+        background-color: #1e1e1e;
+    }
+
+    .form-control {
+        background-color: #2a2a2a;
+        border: 1px solid #444;
+        color: white;
+    }
+
+    .form-control:focus {
+        background-color: #2a2a2a;
+        color: white;
+        border-color: orange;
+        box-shadow: 0 0 5px orange;
+    }
+
+    .btn-primary {
+        background-color: orange;
+        border: none;
+    }
+
+    .btn-primary:hover {
+        background-color: darkorange;
+    }
+
+    .btn-warning {
+        background-color: #ff9800;
+        border: none;
+        color: black;
+    }
+
+    .btn-danger {
+        background-color: #e53935;
+    }
+
+    .btn-success {
+        background-color: #ff9800;
+        border: none;
+        color: black;
+    }
+
+    h1, h2, h3 {
+        color: orange;
+    }
+
+    .table td,
+    .table th {
+        color: white !important;
+    }
+
+    .container {
+        background-color: #121212;
+    }
+
+    html {
+        background-color: #121212;
+    }
+
+    .footer {
+        margin-left: 240px;
+        width: calc(100% - 240px);
+        background-color: #181818;
+        border-top: 1px solid #333;
+        color: #aaa;
+    }
+
+    .footer-link {
+        color: orange;
+        text-decoration: none;
+    }
+
+    .footer-link:hover {
+        color: darkorange;
+    }
+
+    .form-control::placeholder {
+        color: white !important;
+        opacity: 0.7;
+    }
+
+    .layout {
+        display: flex;
+        min-height: 100vh;
+        background-color: #121212;
+    }
+
+    .sidebar {
+        width: 240px;
+        background-color: #181818;
+        border-right: 1px solid #333;
+        padding: 24px 16px;
+        position: fixed;
+        height: 100vh;
+    }
+
+    .sidebar-title {
+        color: orange;
+        font-size: 22px;
+        margin-bottom: 32px;
+    }
+
+    .sidebar-link {
+        display: block;
+        color: #ccc;
+        text-decoration: none;
+        padding: 12px 14px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+
+    .sidebar-link:hover {
+        background-color: #2a2a2a;
+        color: white;
+    }
+
+    .sidebar-link.active {
+        background-color: orange;
+        color: black;
+        font-weight: bold;
+    }
+
+    .sidebar-logout {
+        position: absolute;
+        bottom: 24px;
+        left: 16px;
+        right: 16px;
+        background-color: #e53935;
+        border: none;
+        color: white;
+        padding: 10px;
+        border-radius: 8px;
+    }
+
+    .main-content {
+        margin-left: 240px;
+        padding: 40px;
+        width: calc(100% - 240px);
+    }
+    .btn:active {
+        background-color: #000 !important;
+        border-color: #000 !important;
+        color: white !important;
+        box-shadow: none !important;
+    }
+
+    </style>
+</head>
+
+<body>
+
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <h2 class="sidebar-title">Parking Admin</h2>
+
+        <a href="/api/dashboard/" class="sidebar-link active">
+            停車場管理
+        </a>
+
+        <a href="/api/logs/" class="sidebar-link">
+            系統紀錄
+        </a>
+
+        <button class="sidebar-logout" onclick="logout()">
+            登出
+        </button>
+    </aside>
+
+    <main class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+
+            <h1>停車場管理後台</h1>
+
+        </div>
+
+        <div class="card p-4 mb-4">
+            <h3>新增停車場</h3>
+
+            <div class="row">
+
+                <div class="col-md-4">
+                    <label class="form-label">停車場 ID</label>
+                    <input id="createLotId" class="form-control">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">停車場名稱</label>
+                    <input id="createLotName" class="form-control">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">行政區</label>
+                    <select id="createArea" class="form-control">
+                        <option value="">請選擇行政區</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6 mt-3">
+                    <label class="form-label">地址</label>
+                    <input id="createAddr" class="form-control">
+                </div>
+
+                <div class="col-md-3 mt-3">
+                    <label class="form-label">總車位</label>
+                    <input id="createCarSpace" type="number" class="form-control" min="1">
+                </div>
+
+                <div class="col-md-3 mt-3">
+                    <label class="form-label">收費方式</label>
+                    <input id="createCharge" class="form-control">
+                </div>
+
+                <div class="col-md-6 mt-3">
+                    <label class="form-label">營業時間</label>
+                    <input id="createServiceTime" class="form-control">
+                </div>
+
+                <div class="col-md-3 mt-3">
+                    <label class="form-label">緯度</label>
+                    <input id="createLat" class="form-control">
+                </div>
+
+                <div class="col-md-3 mt-3">
+                    <label class="form-label">經度</label>
+                    <input id="createLng" class="form-control">
+                </div>
+
+            </div>
+
+            <button
+                class="btn btn-primary mt-4"
+                onclick="createParkingLot()"
+            >
+                新增停車場
+            </button>
+        </div>
+
+        <div class="card p-4">
+            <h3>搜尋停車場</h3>
+
+            <div class="row mt-3">
+                <div class="col-md-4">
+                    <label class="form-label">行政區</label>
+                    <select id="searchArea" class="form-control">
+                        <option value="">全部行政區</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">關鍵字</label>
+                    <input id="keyword" class="form-control" placeholder="例如：嘟嘟房">
+                </div>
+
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="searchParkingLots()">
+                        搜尋
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4 mt-4" id="updateFormCard" style="display: none;">
+            <h3>修改停車場</h3>
+
+            <input type="hidden" id="updateLotId">
+
+            <label class="form-label mt-2">停車場名稱</label>
+            <input id="updateLotName" class="form-control">
+
+            <label class="form-label mt-2">地址</label>
+            <input id="updateAddr" class="form-control">
+
+            <label class="form-label mt-2">總車位</label>
+            <input id="updateCarSpace" type="number" class="form-control" min="1">
+
+            <label class="form-label mt-2">收費方式</label>
+            <input id="updateCharge" class="form-control">
+
+            <label class="form-label mt-2">營業時間</label>
+            <input id="updateServiceTime" class="form-control">
+
+            <button class="btn btn-warning mt-3" onclick="submitUpdate()">
+                送出修改
+            </button>
+        </div>
+
+        <div class="card p-4 mt-4">
+            <h3>搜尋結果</h3>
+
+            <table class="table table-bordered table-hover mt-3">
+                <thead>
+                    <tr>
+                        <th>選擇</th>
+                        <th>停車場 ID</th>
+                        <th>停車場名稱</th>
+                        <th>行政區</th>
+                        <th>地址</th>
+                        <th>總車位</th>
+                        <th>收費方式</th>
+                        <th>營業時間</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+
+                <tbody id="parkingTableBody">
+                    <tr>
+                        <td colspan="9" class="text-center">尚未搜尋</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+</div>
+
+
+<script>
+
+const token = localStorage.getItem("token");
+
+async function checkLogin() {
+    if (!token) {
+        alert("請先登入");
+        window.location.href = "/api/login-page/";
+        return;
+    }
+
+    const response = await fetch("/api/test-admin/", {
+        headers: {
+            "Authorization": "Token " + token
+        }
+    });
+
+    if (!response.ok) {
+        alert("登入已失效，請重新登入");
+        localStorage.removeItem("token");
+        window.location.href = "/api/login-page/";
+        return;
+    }
+}
+
+checkLogin();
+
+async function loadAreas() {
+
+    const response =
+        await fetch("/api/areas/");
+
+    const data =
+        await response.json();
+
+    const createSelect =
+        document.getElementById("createArea");
+
+    const searchSelect =
+        document.getElementById("searchArea");
+
+    createSelect.innerHTML =
+        '<option value="">請選擇行政區</option>';
+
+    searchSelect.innerHTML =
+        '<option value="">請選擇行政區</option>';
+
+    data.forEach(area => {
+        createSelect.innerHTML += `
+            <option value="${area.area_name}">
+                ${area.area_name}
+            </option>
+        `;
+
+        searchSelect.innerHTML += `
+            <option value="${area.area_name}">
+                ${area.area_name}
+            </option>
+        `;
+    });
+}
+
+loadAreas();
+
+async function searchParkingLots() {
+    const area = document.getElementById("searchArea").value;
+    const keyword = document.getElementById("keyword").value;
+
+    const response = await fetch(`/api/search/?area=${area}&keyword=${keyword}`);
+    const data = await response.json();
+
+    const tbody = document.getElementById("parkingTableBody");
+    tbody.innerHTML = "";
+
+    if (data.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center">查無資料</td>
+            </tr>
+        `;
+        return;
+    }
+
+    data.forEach(lot => {
+        tbody.innerHTML += `
+            <tr>
+                <td><input type="radio" name="selectedLot" value="${lot.lot_id}"></td>
+                <td>${lot.lot_id}</td>
+                <td>${lot.lot_name}</td>
+                <td>${lot.area}</td>
+                <td>${lot.addr}</td>
+                <td>${lot.car_space}</td>
+                <td>${lot.charge || ""}</td>
+                <td>${lot.service_time || ""}</td>
+                <td>
+                    <button class="btn btn-warning btn-sm" onclick='showUpdateForm(${JSON.stringify(lot)})'>
+                        修改
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="confirmDelete('${lot.lot_id}')">
+                        刪除
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function confirmUpdate(lotId) {
+    if (confirm("確認要修改這筆停車場資料嗎？")) {
+        alert("之後會接修改 API，停車場 ID：" + lotId);
+    }
+}
+
+async function confirmDelete(lotId) {
+    if (!confirm("確認刪除嗎？此動作無法復原。")) {
+        return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    const response = await fetch(`/api/parking-lots/${lotId}/delete/`, {
+        method: "DELETE",
+        headers: {
+            "Authorization": "Token " + token
+        }
+    });
+
+    const data = await response.json();
+    alert(data.message);
+
+    searchParkingLots();
+}
+
+function showUpdateForm(lot) {
+    document.getElementById("updateFormCard").style.display = "block";
+
+    document.getElementById("updateLotId").value = lot.lot_id;
+    document.getElementById("updateLotName").value = lot.lot_name;
+    document.getElementById("updateAddr").value = lot.addr;
+    document.getElementById("updateCarSpace").value = lot.car_space;
+    document.getElementById("updateCharge").value = lot.charge || "";
+    document.getElementById("updateServiceTime").value = lot.service_time || "";
+}
+
+async function submitUpdate() {
+    if (!confirm("確認修改這筆停車場資料嗎？")) {
+        return;
+    }
+
+    const lotId = document.getElementById("updateLotId").value;
+    const token = localStorage.getItem("token");
+
+    const response = await fetch(`/api/parking-lots/${lotId}/update/`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Token " + token
+        },
+        body: JSON.stringify({
+            lot_name: document.getElementById("updateLotName").value,
+            addr: document.getElementById("updateAddr").value,
+            car_space: document.getElementById("updateCarSpace").value,
+            charge: document.getElementById("updateCharge").value,
+            service_time: document.getElementById("updateServiceTime").value
+        })
+    });
+
+    const data = await response.json();
+    alert(data.message);
+
+    searchParkingLots();
+}
+
+async function createParkingLot() {
+
+    if (!confirm("確認新增停車場嗎？")) {
+        return;
+    }
+
+    const token =
+        localStorage.getItem("token");
+
+    const response = await fetch(
+        "/api/parking-lots/create/",
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Token " + token
+            },
+
+            body: JSON.stringify({
+
+                lot_id:
+                    document.getElementById("createLotId").value,
+
+                lot_name:
+                    document.getElementById("createLotName").value,
+
+                area:
+                    document.getElementById("createArea").value,
+
+                addr:
+                    document.getElementById("createAddr").value,
+
+                car_space:
+                    document.getElementById("createCarSpace").value,
+
+                charge:
+                    document.getElementById("createCharge").value,
+                
+                service_time:
+                    document.getElementById("createServiceTime").value,
+
+                latitude:
+                    document.getElementById("createLat").value,
+
+                longitude:
+                    document.getElementById("createLng").value
+            })
+        }
+    );
+
+    const data = await response.json();
+
+    alert(data.message);
+}
+
+function logout() {
+
+    if (!confirm("確認登出嗎？")) {
+        return;
+    }
+
+    localStorage.removeItem("token");
+
+    alert("已登出");
+
+    window.location.href = "/api/login-page/";
+}
+
+</script>
+
+<footer class="footer mt-5 py-4">
+    <div class="container d-flex justify-content-between align-items-center">
+
+        <div>
+            勤勞樸實
+        </div>
+
+    </div>
+</footer>
+
+</body>
+</html>
