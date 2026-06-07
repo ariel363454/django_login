@@ -81,12 +81,15 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'parking_clean',
-        'USER': 'root',
-        'PASSWORD': '',
-        'HOST': '127.0.0.1',
+        'USER': 'ariel',
+        'PASSWORD': '@ariel6636', 
+        'HOST': 'db-tp-sv.mysql.database.azure.com',
         'PORT': '3306',
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'ssl': {
+                'ssl_mode': 'REQUIRED'
+            }
         }
     }
 }
