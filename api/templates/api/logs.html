@@ -302,11 +302,11 @@ function logout() {
  
     localStorage.removeItem("token");
     alert("已登出");
-    window.location.href = "/api/login-page/";
+    window.location.href = "https://django-tp-login-h4aghjbncxc4eyhc.eastasia-01.azurewebsites.net/api/login-page/";
 }
  
 async function loadUpdateHistory() {
-    const response = await fetch("/api/update-history/", {
+    const response = await fetch("https://django-tp-login-h4aghjbncxc4eyhc.eastasia-01.azurewebsites.net/api/update-history/", {
         headers: {
             "Authorization": "Token " + token
         }
@@ -340,7 +340,7 @@ async function loadUpdateHistory() {
 }
  
 async function loadAdminActionLogs() {
-    const response = await fetch("/api/admin-action-logs/", {
+    const response = await fetch("https://django-tp-login-h4aghjbncxc4eyhc.eastasia-01.azurewebsites.net/api/admin-action-logs/", {
         headers: {
             "Authorization": "Token " + token
         }
