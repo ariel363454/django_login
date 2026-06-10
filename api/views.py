@@ -6,9 +6,9 @@ import re
 from django.views.decorators.csrf import csrf_exempt
 from .decorators import admin_required
 from django.shortcuts import render
-from django.db import connection # 🚀 引入原生資料庫連線核心
+from django.db import connection, transaction # 🚀 引入原生資料庫連線與事務核心
 import datetime
-from .models import ParkingLot, Area, OwnerType, UpdateHistory, AdminActionLog
+from .models import ParkingLot, Area, OwnerType, UpdateHistory, AdminActionLog, ParkingRateRule
 
 @csrf_exempt
 def login_api(request):
@@ -56,6 +56,18 @@ def search_parking_lots(request):
 
     data = []
     for lot in parking_lots:
+        rules_qs = ParkingRateRule.objects.filter(lot=lot)
+        rules_list = []
+        for rule in rules_qs:
+            rules_list.append({
+                "rule_id": rule.rule_id,
+                "day_mask": rule.day_mask,
+                "start_time": rule.start_time.strftime("%H:%M") if rule.start_time else "00:00",
+                "end_time": rule.end_time.strftime("%H:%M") if rule.end_time else "23:59",
+                "hourly_rate": rule.hourly_rate,
+                "per_time_rate": rule.per_time_rate,
+                "rate_text": rule.rate_text
+            })
         data.append({
             "lot_id": lot.lot_id,
             "lot_name": lot.lot_name,
@@ -63,7 +75,8 @@ def search_parking_lots(request):
             "addr": lot.addr,
             "car_space": lot.car_space,
             "charge": lot.charge,
-            "service_time": lot.service_time
+            "service_time": lot.service_time,
+            "rate_rules": rules_list
         })
     return JsonResponse(data, safe=False)
 
@@ -125,30 +138,129 @@ def update_parking_lot(request, lot_id):
     if len(new_name) > 100 or len(new_addr) > 200:
         return JsonResponse({"status": "error", "message": "修改的文字內容長度超出極限"}, status=400)
 
-    lot.lot_name = new_name
-    lot.addr = new_addr
-    lot.charge = new_charge
-    lot.service_time = new_service_time
-    
-    if "car_space" in data:
-        try:
-            new_space = int(data["car_space"])
-            if new_space < 1:
-                return JsonResponse({"status": "error", "message": "總車位必須大於 0"}, status=400)
-            lot.car_space = new_space
-        except ValueError:
-            return JsonResponse({"status": "error", "message": "總車位格式錯誤"}, status=400)
+    # 費率規則驗證
+    rate_rules = data.get("rate_rules")
+    validated_rules = []
+    if rate_rules is not None:
+        if not rate_rules:
+            return JsonResponse({"status": "error", "message": "必須填寫至少一個費率規則"}, status=400)
 
-    lot.save()
+        for index, rule in enumerate(rate_rules):
+            day_mask = rule.get("day_mask")
+            start_time_str = rule.get("start_time")
+            end_time_str = rule.get("end_time")
+            hourly_rate_val = rule.get("hourly_rate")
+            per_time_rate_val = rule.get("per_time_rate")
+            rate_text_val = rule.get("rate_text", "")
 
-    AdminActionLog.objects.create(
-        admin_username=request.user.username,
-        action_type="UPDATE",
-        target_table="parking_lot",
-        target_id=lot.lot_id,
-        description=f"修改停車場：{lot.lot_name}"
-    )
-    return JsonResponse({"status": "success", "message": "Parking lot updated"})
+            # 1. 驗證 day_mask
+            try:
+                day_mask = int(day_mask)
+                if not (1 <= day_mask <= 127):
+                    raise ValueError()
+            except (TypeError, ValueError):
+                return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的適用星期格式錯誤"}, status=400)
+
+            # 2. 驗證開始與結束時間
+            try:
+                if len(start_time_str.split(':')) == 2:
+                    start_time = datetime.datetime.strptime(start_time_str, "%H:%M").time()
+                else:
+                    start_time = datetime.datetime.strptime(start_time_str, "%H:%M:%S").time()
+                    
+                if len(end_time_str.split(':')) == 2:
+                    end_time = datetime.datetime.strptime(end_time_str, "%H:%M").time()
+                else:
+                    end_time = datetime.datetime.strptime(end_time_str, "%H:%M:%S").time()
+            except (TypeError, ValueError, AttributeError):
+                return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的開始或結束時間格式錯誤，必須為 HH:MM 或 HH:MM:SS"}, status=400)
+
+            # 3. 驗證費率
+            try:
+                if hourly_rate_val is not None and str(hourly_rate_val).strip() != "":
+                    hourly_rate = int(hourly_rate_val)
+                    if hourly_rate < 0:
+                        return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的每小時費率不能為負數"}, status=400)
+                else:
+                    hourly_rate = 0
+            except ValueError:
+                return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的每小時費率格式錯誤"}, status=400)
+
+            try:
+                if per_time_rate_val is not None and str(per_time_rate_val).strip() != "":
+                    per_time_rate = int(per_time_rate_val)
+                    if per_time_rate < 0:
+                        return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的計次費率不能為負數"}, status=400)
+                else:
+                    per_time_rate = 0
+            except ValueError:
+                return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的計次費率格式錯誤"}, status=400)
+
+            if rate_text_val and len(rate_text_val) > 255:
+                rate_text_val = rate_text_val[:255]
+
+            validated_rules.append({
+                "day_mask": day_mask,
+                "start_time": start_time,
+                "end_time": end_time,
+                "hourly_rate": hourly_rate,
+                "per_time_rate": per_time_rate,
+                "rate_text": rate_text_val
+            })
+
+    try:
+        with transaction.atomic():
+            lot.lot_name = new_name
+            lot.addr = new_addr
+            lot.charge = new_charge
+            lot.service_time = new_service_time
+            
+            if "car_space" in data:
+                new_space = int(data["car_space"])
+                if new_space < 1:
+                    return JsonResponse({"status": "error", "message": "總車位必須大於 0"}, status=400)
+                lot.car_space = new_space
+
+            lot.save()
+
+            if rate_rules is not None:
+                with connection.cursor() as cursor:
+                    # 1. 刪除原有費率規則
+                    cursor.execute("DELETE FROM parking_rate_rule WHERE lot_id = %s", [lot.lot_id])
+                    
+                    # 2. 插入新費率規則
+                    insert_rule_sql = """
+                        INSERT INTO parking_rate_rule (
+                            lot_id, day_mask, start_time, end_time, hourly_rate, per_time_rate, rate_text
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s
+                        )
+                    """
+                    for rule in validated_rules:
+                        cursor.execute(insert_rule_sql, [
+                            lot.lot_id,
+                            rule["day_mask"],
+                            rule["start_time"].strftime("%H:%M:%S"),
+                            rule["end_time"].strftime("%H:%M:%S"),
+                            rule["hourly_rate"],
+                            rule["per_time_rate"],
+                            rule["rate_text"]
+                        ])
+
+        desc = f"修改停車場：{lot.lot_name}"
+        if rate_rules is not None:
+            desc += f"，並更新為 {len(validated_rules)} 筆費率規則"
+
+        AdminActionLog.objects.create(
+            admin_username=request.user.username,
+            action_type="UPDATE",
+            target_table="parking_lot",
+            target_id=lot.lot_id,
+            description=desc
+        )
+        return JsonResponse({"status": "success", "message": "Parking lot updated successfully"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
 
 
 @csrf_exempt
@@ -198,6 +310,75 @@ def create_parking_lot(request):
     if len(data["lot_name"]) > 100 or len(data["addr"]) > 200 or len(data["lot_id"]) > 20:
         return JsonResponse({"status": "error", "message": "字串長度過長，已超出欄位極限！"}, status=400)
 
+    # 費率規則驗證
+    rate_rules = data.get("rate_rules", [])
+    if not rate_rules:
+        return JsonResponse({"status": "error", "message": "必須填寫至少一個費率規則"}, status=400)
+
+    validated_rules = []
+    for index, rule in enumerate(rate_rules):
+        day_mask = rule.get("day_mask")
+        start_time_str = rule.get("start_time")
+        end_time_str = rule.get("end_time")
+        hourly_rate_val = rule.get("hourly_rate")
+        per_time_rate_val = rule.get("per_time_rate")
+        rate_text_val = rule.get("rate_text", "")
+
+        # 1. 驗證 day_mask
+        try:
+            day_mask = int(day_mask)
+            if not (1 <= day_mask <= 127):
+                raise ValueError()
+        except (TypeError, ValueError):
+            return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的適用星期格式錯誤"}, status=400)
+
+        # 2. 驗證開始與結束時間
+        try:
+            if len(start_time_str.split(':')) == 2:
+                start_time = datetime.datetime.strptime(start_time_str, "%H:%M").time()
+            else:
+                start_time = datetime.datetime.strptime(start_time_str, "%H:%M:%S").time()
+                
+            if len(end_time_str.split(':')) == 2:
+                end_time = datetime.datetime.strptime(end_time_str, "%H:%M").time()
+            else:
+                end_time = datetime.datetime.strptime(end_time_str, "%H:%M:%S").time()
+        except (TypeError, ValueError, AttributeError):
+            return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的開始或結束時間格式錯誤，必須為 HH:MM 或 HH:MM:SS"}, status=400)
+
+        # 3. 驗證費率
+        try:
+            if hourly_rate_val is not None and str(hourly_rate_val).strip() != "":
+                hourly_rate = int(hourly_rate_val)
+                if hourly_rate < 0:
+                    return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的每小時費率不能為負數"}, status=400)
+            else:
+                hourly_rate = 0
+        except ValueError:
+            return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的每小時費率格式錯誤"}, status=400)
+
+        try:
+            if per_time_rate_val is not None and str(per_time_rate_val).strip() != "":
+                per_time_rate = int(per_time_rate_val)
+                if per_time_rate < 0:
+                    return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的計次費率不能為負數"}, status=400)
+            else:
+                per_time_rate = 0
+        except ValueError:
+            return JsonResponse({"status": "error", "message": f"第 {index+1} 個費率規則的計次費率格式錯誤"}, status=400)
+
+        if rate_text_val and len(rate_text_val) > 255:
+            rate_text_val = rate_text_val[:255]
+
+        validated_rules.append({
+            "day_mask": day_mask,
+            "start_time": start_time,
+            "end_time": end_time,
+            "hourly_rate": hourly_rate,
+            "per_time_rate": per_time_rate,
+            "rate_text": rate_text_val
+        })
+
     try:
         area = Area.objects.get(area_name=data["area"])
         owner_type = OwnerType.objects.first()
@@ -205,34 +386,54 @@ def create_parking_lot(request):
         if owner_type is None:
             return JsonResponse({"status": "error", "message": "請先在 OwnerType 新增至少一筆資料"}, status=400)
 
-        # 🚀【黃金優化突破點：免 GDAL 原生 SQL 幾何寫入】
-        # 徹底拋棄 `from django.contrib.gis.geos import Point`，完美解決本機與線上缺少 GDAL 庫而跳出的彈窗報錯
-        with connection.cursor() as cursor:
-            insert_sql = """
-                INSERT INTO parking_lot (
-                    lot_id, area_id, lot_name, data_type, owner_type, addr, 
-                    car_space, pregnancy_space, handicap_space, service_time, 
-                    latitude, longitude, charge
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, 
-                    %s, %s, %s, %s, 
-                    %s, %s, %s
-                )
-            """
-            cursor.execute(insert_sql, [
-                data["lot_id"], area.area_id, data["lot_name"].strip(), 1, owner_type_val, data["addr"].strip(),
-                car_space, 0, 0, data.get("service_time", "").strip(),
-                latitude, longitude, data.get("charge", "").strip(),
-            ])
+        # 使用 transaction.atomic 確保停車場與費率規則的資料完整性
+        with transaction.atomic():
+            # 🚀【黃金優化突破點：免 GDAL 原生 SQL 幾何寫入】
+            with connection.cursor() as cursor:
+                insert_sql = """
+                    INSERT INTO parking_lot (
+                        lot_id, area_id, lot_name, data_type, owner_type, addr, 
+                        car_space, pregnancy_space, handicap_space, service_time, 
+                        latitude, longitude, charge
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, 
+                        %s, %s, %s, %s, 
+                        %s, %s, %s
+                    )
+                """
+                cursor.execute(insert_sql, [
+                    data["lot_id"], area.area_id, data["lot_name"].strip(), 1, owner_type_val, data["addr"].strip(),
+                    car_space, 0, 0, data.get("service_time", "").strip(),
+                    latitude, longitude, data.get("charge", "").strip(),
+                ])
+
+                # 插入費率規則
+                insert_rule_sql = """
+                    INSERT INTO parking_rate_rule (
+                        lot_id, day_mask, start_time, end_time, hourly_rate, per_time_rate, rate_text
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s
+                    )
+                """
+                for rule in validated_rules:
+                    cursor.execute(insert_rule_sql, [
+                        data["lot_id"],
+                        rule["day_mask"],
+                        rule["start_time"].strftime("%H:%M:%S"),
+                        rule["end_time"].strftime("%H:%M:%S"),
+                        rule["hourly_rate"],
+                        rule["per_time_rate"],
+                        rule["rate_text"]
+                    ])
 
         AdminActionLog.objects.create(
             admin_username=request.user.username,
             action_type="CREATE",
             target_table="parking_lot",
             target_id=data["lot_id"],
-            description=f"新增停車場：{data['lot_name']}"
+            description=f"新增停車場：{data['lot_name']}，並登記 {len(validated_rules)} 筆費率規則"
         )
-        return JsonResponse({"status": "success", "message": "Parking lot created"})
+        return JsonResponse({"status": "success", "message": "Parking lot created successfully"})
 
     except Area.DoesNotExist:
         return JsonResponse({"status": "error", "message": f"找不到行政區：{data['area']}"}, status=400)
