@@ -5,6 +5,8 @@
     <title>停車場管理後台</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
     body {
         background-color: #121212;
@@ -17,9 +19,16 @@
     }
     .table {
         color: white;
+        --bs-table-border-color: #373b3e !important;
+        --bs-border-color: #373b3e !important;
+        border-color: #373b3e !important;
+    }
+    .table th, .table td, .table tr {
+        border-color: #373b3e !important;
     }
     .table th {
         background-color: #2a2a2a;
+        white-space: nowrap;
     }
     .table td {
         background-color: #1e1e1e;
@@ -142,6 +151,35 @@
         color: white !important;
         box-shadow: none !important;
     }
+    .btn-xs {
+        padding: 2px 6px;
+        font-size: 11px;
+        line-height: 1.5;
+        border-radius: 4px;
+    }
+    #createMap {
+        width: 100%;
+        height: 420px;
+        border: 1px solid #444;
+        border-radius: 8px;
+        margin-top: 12px;
+    }
+    .map-help {
+        color: #bbb;
+        font-size: 14px;
+        margin-top: 8px;
+    }
+    .day-checkbox, .update-day-checkbox {
+        accent-color: orange;
+    }
+    input[type="time"]::-webkit-calendar-picker-indicator {
+        filter: invert(1);
+    }
+    #rateRulesTable, #updateRateRulesTable,
+    #rateRulesTable th, #rateRulesTable td,
+    #updateRateRulesTable th, #updateRateRulesTable td {
+        border-color: #373b3e !important;
+    }
     </style>
 </head>
 
@@ -179,7 +217,7 @@
                 </div>
                 <div class="col-md-6 mt-3">
                     <label class="form-label">地址</label>
-                    <input id="createAddr" class="form-control">
+                    <input id="createAddr" class="form-control" onchange="geocodeAddress()">
                 </div>
                 <div class="col-md-3 mt-3">
                     <label class="form-label">總車位</label>
@@ -214,7 +252,42 @@
                     <label class="form-label">經度</label>
                     <input id="createLng" class="form-control">
                 </div>
+                <div class="col-12 mt-3">
+                    <label class="form-label">地圖位置</label>
+                    <div id="createMap"></div>
+                    <div class="map-help">
+                        請在地圖上點選停車場位置，系統會自動填入地址、行政區、緯度與經度。
+                    </div>
+                </div>
             </div>
+
+            <!-- 費率設定區塊 -->
+            <div class="mt-4">
+                <h4 class="text-warning">費率設定</h4>
+                <p class="text-secondary small">請為該停車場新增至少一筆費率規則。系統會依據不同的星期與時間區間，套用對應的每小時費率或計次費率。</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle" id="rateRulesTable">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 220px;">適用星期</th>
+                                <th style="width: 130px;">開始時間</th>
+                                <th style="width: 130px;">結束時間</th>
+                                <th style="width: 120px;">每小時費率</th>
+                                <th style="width: 120px;">計次費率</th>
+                                <th>費率說明 (選填)</th>
+                                <th style="width: 60px;" class="text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rateRulesBody">
+                            <!-- 動態插入規則 -->
+                        </tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-outline-warning btn-sm mt-2" onclick="addRateRuleRow()">
+                    ＋ 新增費率規則
+                </button>
+            </div>
+
             <button class="btn btn-primary mt-4" onclick="createParkingLot()">新增停車場</button>
         </div>
 
@@ -256,7 +329,34 @@
             <label class="form-label mt-2">營業時間</label>
             <input id="updateServiceTime" class="form-control">
 
-            <button class="btn btn-warning mt-3" onclick="submitUpdate()">送出修改</button>
+            <!-- 費率設定（修改）區塊 -->
+            <div class="mt-4">
+                <h4 class="text-warning">費率設定 (修改)</h4>
+                <p class="text-secondary small">你可以修改、新增或刪除此停車場的費率規則。</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle" id="updateRateRulesTable">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 220px;">適用星期</th>
+                                <th style="width: 130px;">開始時間</th>
+                                <th style="width: 130px;">結束時間</th>
+                                <th style="width: 120px;">每小時費率</th>
+                                <th style="width: 120px;">計次費率</th>
+                                <th>費率說明 (選填)</th>
+                                <th style="width: 60px;" class="text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="updateRateRulesBody">
+                            <!-- 動態插入已存在的費率規則 -->
+                        </tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-outline-warning btn-sm mt-2" onclick="addUpdateRateRuleRow()">
+                    ＋ 新增費率規則
+                </button>
+            </div>
+
+            <button class="btn btn-warning mt-4" onclick="submitUpdate()">送出修改</button>
         </div>
 
         <div class="card p-4 mt-4">
@@ -264,20 +364,19 @@
             <table class="table table-bordered table-hover mt-3">
                 <thead>
                     <tr>
-                        <th>選擇</th>
-                        <th>停車場 ID</th>
-                        <th>停車場名稱</th>
-                        <th>行政區</th>
-                        <th>地址</th>
-                        <th>總車位</th>
+                        <th style="width: 80px;">停車場 ID</th>
+                        <th style="width: 180px;">停車場名稱</th>
+                        <th style="width: 70px;">行政區</th>
+                        <th style="width: 210px;">地址</th>
+                        <th style="width: 65px;">總車位</th>
                         <th>收費方式</th>
-                        <th>營業時間</th>
-                        <th>操作</th>
+                        <th style="width: 130px;">營業時間</th>
+                        <th style="width: 60px; text-align: center;">操作</th>
                     </tr>
                 </thead>
                 <tbody id="parkingTableBody">
                     <tr>
-                        <td colspan="9" class="text-center">尚未搜尋</td>
+                        <td colspan="8" class="text-center">尚未搜尋</td>
                     </tr>
                 </tbody>
             </table>
@@ -285,8 +384,223 @@
     </main>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
 const token = localStorage.getItem("token");
+
+// --- 費率修改動態操作 Javascript ---
+let updateRuleRowId = 0;
+
+function addUpdateRateRuleRow(presetData = null) {
+    const tbody = document.getElementById("updateRateRulesBody");
+    if (!tbody) return;
+    const rowId = updateRuleRowId++;
+    
+    const tr = document.createElement("tr");
+    tr.id = `update-rate-rule-row-${rowId}`;
+    
+    const startTime = presetData?.start_time || "00:00";
+    const endTime = presetData?.end_time || "23:59";
+    const hourlyRate = presetData?.hourly_rate !== undefined ? presetData.hourly_rate : "30";
+    const perTimeRate = presetData?.per_time_rate !== undefined ? presetData.per_time_rate : "0";
+    const rateText = presetData?.rate_text || "";
+    const dayMask = presetData?.day_mask !== undefined ? presetData.day_mask : 127;
+    
+    const mChecked = dayMask & 1 ? "checked" : "";
+    const tChecked = dayMask & 2 ? "checked" : "";
+    const wChecked = dayMask & 4 ? "checked" : "";
+    const thChecked = dayMask & 8 ? "checked" : "";
+    const fChecked = dayMask & 16 ? "checked" : "";
+    const sChecked = dayMask & 32 ? "checked" : "";
+    const suChecked = dayMask & 64 ? "checked" : "";
+
+    tr.innerHTML = `
+        <td>
+            <div class="day-mask-selector" data-row-id="${rowId}">
+                <div class="d-flex gap-1 mb-2">
+                    <button type="button" class="btn btn-outline-warning btn-xs py-0 px-1" onclick="setUpdateRowPreset(${rowId}, 'all')">每日</button>
+                    <button type="button" class="btn btn-outline-warning btn-xs py-0 px-1" onclick="setUpdateRowPreset(${rowId}, 'weekday')">平日</button>
+                    <button type="button" class="btn btn-outline-warning btn-xs py-0 px-1" onclick="setUpdateRowPreset(${rowId}, 'weekend')">假日</button>
+                </div>
+                <div class="d-flex gap-1">
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="update-day-checkbox" value="1" ${mChecked}>一
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="update-day-checkbox" value="2" ${tChecked}>二
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="update-day-checkbox" value="4" ${wChecked}>三
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="update-day-checkbox" value="8" ${thChecked}>四
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="update-day-checkbox" value="16" ${fChecked}>五
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2d1a00; border-color: orange !important; width: 22px; cursor: pointer; color: orange;">
+                        <input type="checkbox" class="update-day-checkbox" value="32" ${sChecked}>六
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2d1a00; border-color: orange !important; width: 22px; cursor: pointer; color: orange;">
+                        <input type="checkbox" class="update-day-checkbox" value="64" ${suChecked}>日
+                    </label>
+                </div>
+            </div>
+        </td>
+        <td>
+            <input type="time" class="form-control form-control-sm update-rate-start-time" value="${startTime}">
+        </td>
+        <td>
+            <input type="time" class="form-control form-control-sm update-rate-end-time" value="${endTime}">
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm update-rate-hourly-rate" value="${hourlyRate}" min="0">
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm update-rate-per-time-rate" value="${perTimeRate}" min="0">
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm update-rate-text" value="${rateText}" placeholder="例如：每小時${hourlyRate}元">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeUpdateRateRuleRow(${rowId})"><i class="bi bi-trash3"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function removeUpdateRateRuleRow(rowId) {
+    const row = document.getElementById(`update-rate-rule-row-${rowId}`);
+    if (row) {
+        row.remove();
+    }
+}
+
+function setUpdateRowPreset(rowId, type) {
+    const row = document.getElementById(`update-rate-rule-row-${rowId}`);
+    if (!row) return;
+    const checkboxes = row.querySelectorAll(".update-day-checkbox");
+    checkboxes.forEach(cb => {
+        const val = parseInt(cb.value);
+        if (type === 'all') {
+            cb.checked = true;
+        } else if (type === 'weekday') {
+            cb.checked = (val === 1 || val === 2 || val === 4 || val === 8 || val === 16);
+        } else if (type === 'weekend') {
+            cb.checked = (val === 32 || val === 64);
+        }
+    });
+}
+
+// --- 費率設定動態操作 Javascript ---
+let ruleRowId = 0;
+
+function addRateRuleRow(presetData = null) {
+    const tbody = document.getElementById("rateRulesBody");
+    if (!tbody) return;
+    const rowId = ruleRowId++;
+    
+    const tr = document.createElement("tr");
+    tr.id = `rate-rule-row-${rowId}`;
+    
+    const startTime = presetData?.start_time || "00:00";
+    const endTime = presetData?.end_time || "23:59";
+    const hourlyRate = presetData?.hourly_rate !== undefined ? presetData.hourly_rate : "30";
+    const perTimeRate = presetData?.per_time_rate !== undefined ? presetData.per_time_rate : "0";
+    const rateText = presetData?.rate_text || "";
+    const dayMask = presetData?.day_mask !== undefined ? presetData.day_mask : 127;
+    
+    const mChecked = dayMask & 1 ? "checked" : "";
+    const tChecked = dayMask & 2 ? "checked" : "";
+    const wChecked = dayMask & 4 ? "checked" : "";
+    const thChecked = dayMask & 8 ? "checked" : "";
+    const fChecked = dayMask & 16 ? "checked" : "";
+    const sChecked = dayMask & 32 ? "checked" : "";
+    const suChecked = dayMask & 64 ? "checked" : "";
+
+    tr.innerHTML = `
+        <td>
+            <div class="day-mask-selector" data-row-id="${rowId}">
+                <div class="d-flex gap-1 mb-2">
+                    <button type="button" class="btn btn-outline-warning btn-xs py-0 px-1" onclick="setRowPreset(${rowId}, 'all')">每日</button>
+                    <button type="button" class="btn btn-outline-warning btn-xs py-0 px-1" onclick="setRowPreset(${rowId}, 'weekday')">平日</button>
+                    <button type="button" class="btn btn-outline-warning btn-xs py-0 px-1" onclick="setRowPreset(${rowId}, 'weekend')">假日</button>
+                </div>
+                <div class="d-flex gap-1">
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="day-checkbox" value="1" ${mChecked}>一
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="day-checkbox" value="2" ${tChecked}>二
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="day-checkbox" value="4" ${wChecked}>三
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="day-checkbox" value="8" ${thChecked}>四
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2a2a2a; width: 22px; cursor: pointer;">
+                        <input type="checkbox" class="day-checkbox" value="16" ${fChecked}>五
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2d1a00; border-color: orange !important; width: 22px; cursor: pointer; color: orange;">
+                        <input type="checkbox" class="day-checkbox" value="32" ${sChecked}>六
+                    </label>
+                    <label class="form-check-label px-1 border border-secondary rounded text-center" style="font-size: 11px; background: #2d1a00; border-color: orange !important; width: 22px; cursor: pointer; color: orange;">
+                        <input type="checkbox" class="day-checkbox" value="64" ${suChecked}>日
+                    </label>
+                </div>
+            </div>
+        </td>
+        <td>
+            <input type="time" class="form-control form-control-sm rate-start-time" value="${startTime}">
+        </td>
+        <td>
+            <input type="time" class="form-control form-control-sm rate-end-time" value="${endTime}">
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm rate-hourly-rate" value="${hourlyRate}" min="0">
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm rate-per-time-rate" value="${perTimeRate}" min="0">
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm rate-text" value="${rateText}" placeholder="例如：每小時${hourlyRate}元">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRateRuleRow(${rowId})"><i class="bi bi-trash3"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function removeRateRuleRow(rowId) {
+    const row = document.getElementById(`rate-rule-row-${rowId}`);
+    if (row) {
+        row.remove();
+    }
+}
+
+function setRowPreset(rowId, type) {
+    const row = document.getElementById(`rate-rule-row-${rowId}`);
+    if (!row) return;
+    const checkboxes = row.querySelectorAll(".day-checkbox");
+    checkboxes.forEach(cb => {
+        const val = parseInt(cb.value);
+        if (type === 'all') {
+            cb.checked = true;
+        } else if (type === 'weekday') {
+            cb.checked = (val === 1 || val === 2 || val === 4 || val === 8 || val === 16);
+        } else if (type === 'weekend') {
+            cb.checked = (val === 32 || val === 64);
+        }
+    });
+}
+
+// 頁面加載時自動新增第一行預設費率規則
+document.addEventListener("DOMContentLoaded", () => {
+    addRateRuleRow();
+});
 
 async function checkLogin() {
     if (!token) {
@@ -306,6 +620,199 @@ async function checkLogin() {
 }
 checkLogin();
 
+// --- Leaflet 地圖操作 Javascript ---
+let createMap;
+let createMarker;
+
+function initCreateMap() {
+    // 預設顯示台北市中心
+    createMap = L.map("createMap").setView(
+        [25.0478, 121.5319],
+        13
+    );
+
+    L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors"
+        }
+    ).addTo(createMap);
+
+    createMap.on("click", async function(event) {
+        const latitude = event.latlng.lat;
+        const longitude = event.latlng.lng;
+
+        setCreateMarker(latitude, longitude);
+
+        document.getElementById("createLat").value =
+            latitude.toFixed(7);
+
+        document.getElementById("createLng").value =
+            longitude.toFixed(7);
+
+        await reverseGeocode(latitude, longitude);
+    });
+}
+
+function setCreateMarker(latitude, longitude) {
+    if (createMarker) {
+        createMarker.setLatLng([latitude, longitude]);
+    } else {
+        createMarker = L.marker(
+            [latitude, longitude],
+            {
+                draggable: true
+            }
+        ).addTo(createMap);
+
+        createMarker.on("dragend", async function(event) {
+            const position = event.target.getLatLng();
+
+            document.getElementById("createLat").value =
+                position.lat.toFixed(7);
+
+            document.getElementById("createLng").value =
+                position.lng.toFixed(7);
+
+            await reverseGeocode(position.lat, position.lng);
+        });
+    }
+
+    createMap.setView([latitude, longitude], 17);
+}
+
+async function reverseGeocode(latitude, longitude) {
+    try {
+        const url =
+            "https://nominatim.openstreetmap.org/reverse" +
+            `?format=jsonv2&lat=${latitude}&lon=${longitude}` +
+            "&accept-language=zh-TW";
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("地址查詢失敗");
+        }
+
+        const result = await response.json();
+
+        document.getElementById("createAddr").value =
+            formatTaiwanAddress(result.address || {});
+
+        selectAreaFromAddress(result.address || {});
+
+    } catch (error) {
+        console.error(error);
+
+        alert(
+            "已取得經緯度，但目前無法自動取得地址，請手動輸入地址。"
+        );
+    }
+}
+
+function formatTaiwanAddress(address) {
+    const city =
+        address.city ||
+        address.county ||
+        address.state ||
+        "";
+
+    const district =
+        address.city_district ||
+        address.district ||
+        address.suburb ||
+        address.town ||
+        "";
+
+    const road =
+        address.road ||
+        "";
+
+    const houseNumber =
+        address.house_number ||
+        "";
+
+    // 組成資料庫常見格式：臺北市松山區南京東路三段256巷28弄4號
+    let formattedAddress =
+        city + district + road + houseNumber;
+
+    return formattedAddress;
+}
+
+function selectAreaFromAddress(address) {
+    const possibleAreaNames = [
+        address.city_district,
+        address.district,
+        address.suburb,
+        address.borough,
+        address.town
+    ].filter(Boolean);
+
+    const areaSelect =
+        document.getElementById("createArea");
+
+    const options =
+        Array.from(areaSelect.options).filter(option => option.value !== "");
+
+    const matchedOption = options.find(option =>
+        possibleAreaNames.some(areaName =>
+            areaName.includes(option.value) ||
+            option.value.includes(areaName)
+        )
+    );
+
+    if (matchedOption) {
+        areaSelect.value = matchedOption.value;
+    }
+}
+
+async function geocodeAddress() {
+    const address = document.getElementById("createAddr").value.trim();
+    if (!address) return;
+
+    try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&accept-language=zh-TW`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error("地址查詢定位失敗");
+        }
+
+        const results = await response.json();
+        if (results && results.length > 0) {
+            const latitude = parseFloat(results[0].lat);
+            const longitude = parseFloat(results[0].lon);
+
+            // 更新緯度與經度欄位
+            document.getElementById("createLat").value = latitude.toFixed(7);
+            document.getElementById("createLng").value = longitude.toFixed(7);
+
+            // 移動地圖並設標記
+            setCreateMarker(latitude, longitude);
+
+            // 逆向地理編碼，用來自動配對與選取行政區 (不覆蓋手打地址)
+            await updateAreaOnlyFromCoords(latitude, longitude);
+        } else {
+            console.log("查無此地址的定位資料");
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function updateAreaOnlyFromCoords(latitude, longitude) {
+    try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&accept-language=zh-TW`;
+        const response = await fetch(url);
+        if (response.ok) {
+            const result = await response.json();
+            selectAreaFromAddress(result.address || {});
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
 async function loadAreas() {
     const response = await fetch("/api/areas/");
     const data = await response.json();
@@ -320,7 +827,9 @@ async function loadAreas() {
         searchSelect.innerHTML += `<option value="${area.area_name}">${area.area_name}</option>`;
     });
 }
-loadAreas();
+loadAreas().then(() => {
+    initCreateMap();
+});
 
 async function searchParkingLots() {
     const area = document.getElementById("searchArea").value;
@@ -332,14 +841,13 @@ async function searchParkingLots() {
     tbody.innerHTML = "";
 
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center">查無資料</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center">查無資料</td></tr>`;
         return;
     }
 
     data.forEach(lot => {
         tbody.innerHTML += `
             <tr>
-                <td><input type="radio" name="selectedLot" value="${lot.lot_id}"></td>
                 <td>${lot.lot_id}</td>
                 <td>${lot.lot_name}</td>
                 <td>${lot.area}</td>
@@ -348,8 +856,10 @@ async function searchParkingLots() {
                 <td>${lot.charge || ""}</td>
                 <td>${lot.service_time || ""}</td>
                 <td>
-                    <button class="btn btn-warning btn-sm" onclick='showUpdateForm(${JSON.stringify(lot)})'>修改</button>
-                    <button class="btn btn-danger btn-sm" onclick="confirmDelete('${lot.lot_id}')">刪除</button>
+                    <div class="d-flex flex-column align-items-center gap-1">
+                        <button class="btn btn-warning btn-xs" onclick='showUpdateForm(${JSON.stringify(lot)})'>修改</button>
+                        <button class="btn btn-danger btn-xs" onclick="confirmDelete('${lot.lot_id}')">刪除</button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -380,11 +890,69 @@ function showUpdateForm(lot) {
     document.getElementById("updateCharge").value = lot.charge || "";
     document.getElementById("updateServiceTime").value = lot.service_time || "";
     
+    // 清空並載入該停車場已有的費率規則
+    const tbody = document.getElementById("updateRateRulesBody");
+    if (tbody) {
+        tbody.innerHTML = "";
+        if (lot.rate_rules && lot.rate_rules.length > 0) {
+            lot.rate_rules.forEach(rule => {
+                addUpdateRateRuleRow(rule);
+            });
+        } else {
+            // 若原本無費率，加載一個預設規則
+            addUpdateRateRuleRow();
+        }
+    }
+    
     document.getElementById("updateFormCard").scrollIntoView({ behavior: 'smooth' });
 }
 
 // 🌐 完美保留你們 urls.py 定義的 RESTful 路由：parking-lots/ID/update/
 async function submitUpdate() {
+    // 收集並驗證費率規則
+    const rateRules = [];
+    const rows = document.querySelectorAll("#updateRateRulesBody tr");
+    
+    for (let row of rows) {
+        let dayMask = 0;
+        const checkboxes = row.querySelectorAll(".update-day-checkbox");
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                dayMask += parseInt(cb.value);
+            }
+        });
+        
+        if (dayMask === 0) {
+            alert("❌ 每個費率規則必須勾選至少一個適用星期！");
+            return;
+        }
+        
+        const startTime = row.querySelector(".update-rate-start-time").value;
+        const endTime = row.querySelector(".update-rate-end-time").value;
+        const hourlyRate = row.querySelector(".update-rate-hourly-rate").value;
+        const perTimeRate = row.querySelector(".update-rate-per-time-rate").value;
+        const rateText = row.querySelector(".update-rate-text").value;
+        
+        if (!startTime || !endTime) {
+            alert("❌ 請填寫費率規則的開始與結束時間！");
+            return;
+        }
+        
+        rateRules.push({
+            day_mask: dayMask,
+            start_time: startTime.includes(":") && startTime.split(":").length === 3 ? startTime : startTime + ":00",
+            end_time: endTime.includes(":") && endTime.split(":").length === 3 ? endTime : endTime + ":00",
+            hourly_rate: hourlyRate,
+            per_time_rate: perTimeRate,
+            rate_text: rateText
+        });
+    }
+    
+    if (rateRules.length === 0) {
+        alert("❌ 請填寫至少一個費率規則！");
+        return;
+    }
+
     if (!confirm("確認修改這筆停車場資料嗎？")) return;
 
     const lotId = document.getElementById("updateLotId").value;
@@ -401,7 +969,8 @@ async function submitUpdate() {
             addr: document.getElementById("updateAddr").value,
             car_space: document.getElementById("updateCarSpace").value,
             charge: document.getElementById("updateCharge").value,
-            service_time: document.getElementById("updateServiceTime").value
+            service_time: document.getElementById("updateServiceTime").value,
+            rate_rules: rateRules // 🚀 傳送修改後的費率規則數組給後端
         })
     });
 
@@ -416,6 +985,50 @@ async function submitUpdate() {
 
 // 🌐 完美保留並對齊： /api/parking-lots/create/ 路由與參數打包
 async function createParkingLot() {
+    // 收集並驗證費率規則
+    const rateRules = [];
+    const rows = document.querySelectorAll("#rateRulesBody tr");
+    
+    for (let row of rows) {
+        let dayMask = 0;
+        const checkboxes = row.querySelectorAll(".day-checkbox");
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                dayMask += parseInt(cb.value);
+            }
+        });
+        
+        if (dayMask === 0) {
+            alert("❌ 每個費率規則必須勾選至少一個適用星期！");
+            return;
+        }
+        
+        const startTime = row.querySelector(".rate-start-time").value;
+        const endTime = row.querySelector(".rate-end-time").value;
+        const hourlyRate = row.querySelector(".rate-hourly-rate").value;
+        const perTimeRate = row.querySelector(".rate-per-time-rate").value;
+        const rateText = row.querySelector(".rate-text").value;
+        
+        if (!startTime || !endTime) {
+            alert("❌ 請填寫費率規則的開始與結束時間！");
+            return;
+        }
+        
+        rateRules.push({
+            day_mask: dayMask,
+            start_time: startTime + ":00", // 將 HH:MM 轉為 HH:MM:00 符合 TimeField 格式
+            end_time: endTime + ":00",     // 將 HH:MM 轉為 HH:MM:00 符合 TimeField 格式
+            hourly_rate: hourlyRate,
+            per_time_rate: perTimeRate,
+            rate_text: rateText
+        });
+    }
+    
+    if (rateRules.length === 0) {
+        alert("❌ 請填寫至少一個費率規則！");
+        return;
+    }
+
     if (!confirm("確認新增停車場嗎？")) return;
 
     const token = localStorage.getItem("token");
@@ -440,7 +1053,8 @@ async function createParkingLot() {
             charge: document.getElementById("createCharge").value,
             service_time: document.getElementById("createServiceTime").value,
             latitude: document.getElementById("createLat").value,
-            longitude: document.getElementById("createLng").value
+            longitude: document.getElementById("createLng").value,
+            rate_rules: rateRules // 🚀 傳送費率規則數組給後端
         })
     });
 
@@ -459,6 +1073,11 @@ async function createParkingLot() {
         document.getElementById("createServiceTime").value = "";
         document.getElementById("createLat").value = "";
         document.getElementById("createLng").value = "";
+        
+        // 重設費率規則表格
+        document.getElementById("rateRulesBody").innerHTML = "";
+        addRateRuleRow();
+
         searchParkingLots();
     }
 }
